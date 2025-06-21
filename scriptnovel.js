@@ -8,6 +8,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     return e;
   };
 
+  const getThumbnailSrc = (src) => src.replace(/\/s\d+\//, "/s400/");
+  const getFullResSrc = (src) => src.replace(/\/s\d+\//, "/s16000/"); // atau "/s0/"
+
   const D = {
     appWrap: $(".pembungkus-aplikasi"),
     sideNav: $(".sisi-navigasi"),
@@ -98,27 +101,44 @@ const getChapLabel = (title, labels, chapterCounter) => {
     });
   };
 
-  const buildGallery = (volIdx) => {
-    D.gallery.innerHTML = "";
-    D.gallery.dataset.volumeIndex = volIdx;
-    const chapters = $$("section.konten-bab", D.volumes[volIdx]);
-    chapters.forEach((chap, i) => {
-      const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
-      const label = getChapLabel(entry?.title.$t || "", entry?.category?.map(c => c.term) || [], i);
-      const badge = label.split(":")[0] || "Bab";
-      $$("img", chap).filter(img => {
-        const style = getComputedStyle(img);
-        return style.display !== "none" || img.classList.contains("galeri-saja");
-      }).forEach(img => {
-        const card = el("div", "kartu-gambar");
-        const lencana = el("div", `lencana-bab ${badge.toLowerCase().replace(/\s/g, "-")}`, badge);
-        const clone = img.cloneNode(true);
-        clone.style.display = "";
-        card.append(lencana, clone);
-        D.gallery.appendChild(card);
-      });
+const buildGallery = async (volIdx) => {
+  D.gallery.innerHTML = "";
+  D.gallery.dataset.volumeIndex = volIdx;
+
+  const chapters = $$("section.konten-bab", D.volumes[volIdx]);
+  let chapterCounter = 1;
+
+  for (const chap of chapters) {
+    const url = chap.dataset.url;
+    const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === url);
+    if (!entry) continue;
+
+    const labels = entry?.category?.map(c => c.term) || [];
+    const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+    if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
+
+    const badge = label.split(":")[0] || "Bab";
+
+    // Buat DOM parser buat ambil <img> dari entry.content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(entry.content.$t, "text/html");
+    const images = [...doc.querySelectorAll("img")].filter(img => {
+      const style = getComputedStyle(img);
+      return style.display !== "none" || img.classList.contains("galeri-saja");
     });
-  };
+
+    for (const img of images) {
+      const card = el("div", "kartu-gambar");
+      const lencana = el("div", `lencana-bab ${badge.toLowerCase().replace(/\s/g, "-")}`, badge);
+      const clone = el("img");
+      clone.src = getThumbnailSrc(img.src);
+      clone.dataset.fullres = getFullResSrc(img.src);
+      clone.alt = img.alt;
+      card.append(lencana, clone);
+      D.gallery.appendChild(card);
+    }
+  }
+};
 
   const activateChap = async (idx, scroll = true) => {
     if (isActivating || idx < 0 || idx >= D.chapters.length) return;
@@ -280,7 +300,8 @@ chaps.forEach((chap) => {
       if (!img) return;
       const overlay = el("div", "kotak-cahaya");
       const clone = el("img");
-      Object.assign(clone, { src: img.src, alt: img.alt });
+      const fullSrc = img.dataset.fullres || img.src;
+      Object.assign(clone, { src: fullSrc, alt: img.alt });
       overlay.appendChild(clone);
       D.body.appendChild(overlay);
       overlay.onclick = () => overlay.remove();
