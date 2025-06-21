@@ -47,13 +47,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.scrollTo({ top: offsetTop - gHeight - gap, behavior: "smooth" });
   };
 
-  const getChapLabel = (title, labels, idx) => {
-    const special = { prologue: "Prolog", interlude: "Interlude", bonus: "Bonus", epilogue: "Epilog", afterword: "Penutup" };
-    const lowerLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
-    const type = lowerLabels.find(l => special[l]);
-    return type ? `${special[type]}: ${title || "Tanpa Judul"}` :
-           (lowerLabels.includes("chapter") ? `Bab ${idx + 1}: ${title || "Tanpa Judul"}` : title || "Tanpa Judul");
+const getChapLabel = (title, labels, chapterCounter) => {
+  const special = {
+    prologue: "Prolog",
+    interlude: "Interlude",
+    bonus: "Bonus",
+    epilogue: "Epilog",
+    afterword: "Penutup"
   };
+
+  const lowerLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
+  const type = lowerLabels.find(l => special[l]);
+
+  if (type) {
+    return `${special[type]}: ${title || "Tanpa Judul"}`;
+  } else if (lowerLabels.includes("chapter")) {
+    return `Bab ${chapterCounter}: ${title || "Tanpa Judul"}`;
+  } else {
+    return title || "Tanpa Judul";
+  }
+};
 
   const fetchFeed = async () => {
     try {
@@ -191,13 +204,21 @@ document.addEventListener("DOMContentLoaded", async () => {
           };
           list.style.display = "none";
         } else {
-          chaps.forEach((chap, ti) => {
-            const idx = D.chapters.indexOf(chap);
-            const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
-            const btn = el("div", "", getChapLabel(entry?.title.$t || "", entry?.category?.map(c => c.term) || [], ti));
-            btn.dataset.indeksKonten = idx;
-            list.appendChild(btn);
-          });
+          let chapterCounter = 1;
+chaps.forEach((chap) => {
+  const idx = D.chapters.indexOf(chap);
+  const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
+  const labels = entry?.category?.map(c => c.term) || [];
+  const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+
+  if (labels.map(l => l.toLowerCase()).includes("chapter")) {
+    chapterCounter++;
+  }
+
+  const btn = el("div", "", label);
+  btn.dataset.indeksKonten = idx;
+  list.appendChild(btn);
+});
           header.onclick = () => {
             const isOpen = box.classList.contains("terbuka");
             $$(".volume-bab", D.sideNav).forEach(v => v.classList.remove("terbuka"));
