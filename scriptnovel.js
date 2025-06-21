@@ -244,7 +244,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Mengaktifkan bab tertentu: Hanya mengubah status data dan memuat konten
     const activateChap = async (index) => {
         if (isActivating || index < 0 || index >= D.chapters.length) return;
-        if (D.activeChapterIndex === index) { // Jika sudah aktif, hanya update UI dan return
+        
+        // Pengecekan tambahan: jika bab sudah aktif dan konten sudah dimuat, cukup update UI
+        if (D.activeChapterIndex === index && D.chapters[index].dataset.loaded) {
             updateNavUI();
             return;
         }
@@ -299,7 +301,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         D.modalChap.classList.add("aktif");
         // Gulir ke galeri saat modal bab muncul
-        scrollToElement(D.galleryWrap); 
+        scrollToElement(D.galleryWrap);
     };
 
     // Menyembunyikan modal daftar bab
@@ -440,13 +442,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 buildNav(); // Bangun ulang navigasi untuk adaptasi mobile/desktop
                 updateNavUI(); // Perbarui UI navigasi berdasarkan D.activeChapterIndex
                 
-                // Gulir ke bab aktif setelah resize, atau ke galeri jika bab belum dipilih
+                // Hanya gulir jika ada bab aktif dan konten baca sudah tidak tersembunyi
                 if (D.activeChapterIndex !== -1 && D.chapters[D.activeChapterIndex]) {
                     scrollToElement(D.chapters[D.activeChapterIndex], "instant"); // Gulir instan saat resize
-                } else if (D.galleryWrap && D.galleryWrap.offsetHeight > 0) {
-                    scrollToElement(D.galleryWrap, "instant");
-                } else {
-                    scrollToElement(D.mainContent, "instant");
                 }
             }, 250);
         });
@@ -458,7 +456,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             D.tombolMulaiBaca.style.display = "none";
             D.tombolVolumeTerbaru.style.display = "none";
             
-            await initContent(); // Pastikan data dan UI dasar terisi
+            await initContent(true); // Kirim flag untuk menandakan aksi mulai baca
             
             // Aktifkan bab PERTAMA (indeks 0)
             await activateChap(0); 
@@ -471,7 +469,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             D.tombolMulaiBaca.style.display = "none";
             D.tombolVolumeTerbaru.style.display = "none";
             
-            await initContent(); // Pastikan data dan UI dasar terisi
+            await initContent(true); // Kirim flag untuk menandakan aksi mulai baca
             
             const lastVolumeIndex = D.volumes.length - 1;
             if (lastVolumeIndex !== -1) {
@@ -487,7 +485,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     // Inisialisasi konten aplikasi (memuat data dan membangun UI)
-    const initContent = async () => {
+    // Tambahkan parameter `isUserInitiatedScroll`
+    const initContent = async (isUserInitiatedScroll = false) => {
         D.loadingOverlay.classList.remove("hidden");
 
         // --- PENTING: Kumpulkan semua elemen volume dan bab sebelum fetchFeed ---
@@ -511,19 +510,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         // Aktifkan bab terakhir yang dibaca saat inisialisasi
         // Ini HANYA mengatur D.activeChapterIndex dan memuat konten.
-        // Scroll akan dilakukan secara terpisah jika diperlukan (misal: saat refresh).
         await activateChap(loadLastReadChapter());
         
         // Setelah data dimuat dan bab aktif ditetapkan, bangun navigasi
         buildNav(); 
         
-        // Gulir ke bab aktif setelah semua UI diinisialisasi untuk pertama kali
-        if (D.activeChapterIndex !== -1 && D.chapters[D.activeChapterIndex]) {
-            scrollToElement(D.chapters[D.activeChapterIndex]);
-        } else if (D.galleryWrap && D.galleryWrap.offsetHeight > 0) {
-            scrollToElement(D.galleryWrap);
-        } else {
-            scrollToElement(D.mainContent);
+        // Hanya gulir ke bab aktif jika ini bukan inisialisasi awal
+        // atau jika inisialisasi dipicu oleh tombol "Mulai Baca" / "Volume Terbaru".
+        // Ini mencegah auto-scroll saat refresh halaman jika belum ada interaksi.
+        if (isUserInitiatedScroll || localStorage.getItem(LAST_READ_KEY) !== null) {
+            if (D.activeChapterIndex !== -1 && D.chapters[D.activeChapterIndex]) {
+                scrollToElement(D.chapters[D.activeChapterIndex]);
+            } else if (D.galleryWrap && D.galleryWrap.offsetHeight > 0) {
+                scrollToElement(D.galleryWrap);
+            } else {
+                scrollToElement(D.mainContent);
+            }
         }
         
         D.loadingOverlay.classList.add("hidden");
@@ -533,10 +535,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     const initApp = () => {
         D.kontenBaca.classList.add("konten-tersembunyi-awal");
         D.modalChap.classList.add("konten-tersembunyi-awal");
-        D.tombolMulaiBaca.style.display = "block";
-        D.tombolVolumeTerbaru.style.display = "block";
+        
+        // Periksa apakah ada bab terakhir yang dibaca
+        const lastReadIndex = loadLastReadChapter();
+        if (localStorage.getItem(LAST_READ_KEY) !== null && lastReadIndex !== -1 && D.chapters[lastReadIndex]) {
+            // Jika ada bab terakhir yang dibaca, tampilkan konten dan inisialisasi
+            D.tombolMulaiBaca.style.display = "none";
+            D.tombolVolumeTerbaru.style.display = "none";
+            D.kontenBaca.classList.remove("konten-tersembunyi-awal");
+            D.modalChap.classList.remove("konten-tersembunyi-awal");
+            initContent(false); // Jangan paksa scroll jika sudah ada riwayat
+        } else {
+            // Jika tidak ada bab terakhir yang dibaca, tampilkan tombol awal
+            D.tombolMulaiBaca.style.display = "block";
+            D.tombolVolumeTerbaru.style.display = "block";
+            D.loadingOverlay.classList.add("hidden"); // Pastikan loading overlay hilang jika tombol ditampilkan
+        }
+        
         initInteractions();
-        D.loadingOverlay.classList.add("hidden");
     };
 
     // Jalankan inisialisasi aplikasi
