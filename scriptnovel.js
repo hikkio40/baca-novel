@@ -28,7 +28,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     feed: [],
     tombolMulaiBaca: $("#tombolMulaiBaca"),
     tombolVolumeTerbaru: $("#tombolVolumeTerbaru"),
-    kontenBaca: $("#kontenBaca")
+    kontenBaca: $("#kontenBaca"),
+    // Tambahkan referensi loading overlay di sini
+    loadingOverlay: $("#loadingOverlay")
   };
 
   let isActivating = false;
@@ -50,26 +52,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.scrollTo({ top: offsetTop - gHeight - gap, behavior: "smooth" });
   };
 
-const getChapLabel = (title, labels, chapterCounter) => {
-  const special = {
-    prologue: "Prolog",
-    interlude: "Interlude",
-    bonus: "Bonus",
-    epilogue: "Epilog",
-    afterword: "Penutup"
+  const getChapLabel = (title, labels, chapterCounter) => {
+    const special = {
+      prologue: "Prolog",
+      interlude: "Interlude",
+      bonus: "Bonus",
+      epilogue: "Epilog",
+      afterword: "Penutup"
+    };
+
+    const lowerLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
+    const type = lowerLabels.find(l => special[l]);
+
+    if (type) {
+      return `${special[type]}: ${title || "Tanpa Judul"}`;
+    } else if (lowerLabels.includes("chapter")) {
+      return `Bab ${chapterCounter}: ${title || "Tanpa Judul"}`;
+    } else {
+      return title || "Tanpa Judul";
+    }
   };
-
-  const lowerLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
-  const type = lowerLabels.find(l => special[l]);
-
-  if (type) {
-    return `${special[type]}: ${title || "Tanpa Judul"}`;
-  } else if (lowerLabels.includes("chapter")) {
-    return `Bab ${chapterCounter}: ${title || "Tanpa Judul"}`;
-  } else {
-    return title || "Tanpa Judul";
-  }
-};
 
   const fetchFeed = async () => {
     try {
@@ -101,44 +103,44 @@ const getChapLabel = (title, labels, chapterCounter) => {
     });
   };
 
-const buildGallery = async (volIdx) => {
-  D.gallery.innerHTML = "";
-  D.gallery.dataset.volumeIndex = volIdx;
+  const buildGallery = async (volIdx) => {
+    D.gallery.innerHTML = "";
+    D.gallery.dataset.volumeIndex = volIdx;
 
-  const chapters = $$("section.konten-bab", D.volumes[volIdx]);
-  let chapterCounter = 1;
+    const chapters = $$("section.konten-bab", D.volumes[volIdx]);
+    let chapterCounter = 1;
 
-  for (const chap of chapters) {
-    const url = chap.dataset.url;
-    const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === url);
-    if (!entry) continue;
+    for (const chap of chapters) {
+      const url = chap.dataset.url;
+      const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === url);
+      if (!entry) continue;
 
-    const labels = entry?.category?.map(c => c.term) || [];
-    const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
-    if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
+      const labels = entry?.category?.map(c => c.term) || [];
+      const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+      if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
 
-    const badge = label.split(":")[0] || "Bab";
+      const badge = label.split(":")[0] || "Bab";
 
-    // Buat DOM parser buat ambil <img> dari entry.content
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(entry.content.$t, "text/html");
-    const images = [...doc.querySelectorAll("img")].filter(img => {
-      const style = getComputedStyle(img);
-      return style.display !== "none" || img.classList.contains("galeri-saja");
-    });
+      // Buat DOM parser buat ambil <img> dari entry.content
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(entry.content.$t, "text/html");
+      const images = [...doc.querySelectorAll("img")].filter(img => {
+        const style = getComputedStyle(img);
+        return style.display !== "none" || img.classList.contains("galeri-saja");
+      });
 
-    for (const img of images) {
-      const card = el("div", "kartu-gambar");
-      const lencana = el("div", `lencana-bab ${badge.toLowerCase().replace(/\s/g, "-")}`, badge);
-      const clone = el("img");
-      clone.src = getThumbnailSrc(img.src);
-      clone.dataset.fullres = getFullResSrc(img.src);
-      clone.alt = img.alt;
-      card.append(lencana, clone);
-      D.gallery.appendChild(card);
+      for (const img of images) {
+        const card = el("div", "kartu-gambar");
+        const lencana = el("div", `lencana-bab ${badge.toLowerCase().replace(/\s/g, "-")}`, badge);
+        const clone = el("img");
+        clone.src = getThumbnailSrc(img.src);
+        clone.dataset.fullres = getFullResSrc(img.src);
+        clone.alt = img.alt;
+        card.append(lencana, clone);
+        D.gallery.appendChild(card);
+      }
     }
-  }
-};
+  };
 
   const activateChap = async (idx, scroll = true) => {
     if (isActivating || idx < 0 || idx >= D.chapters.length) return;
@@ -162,10 +164,21 @@ const buildGallery = async (volIdx) => {
 
     D.modalVolTitle.textContent = vol.dataset.volume || `Volume ${volIdx + 1}`;
     D.modalChapList.innerHTML = "";
-    chapters.forEach((chap, i) => {
+
+    let chapterCounter = 1;
+
+    chapters.forEach((chap) => {
       const idx = D.chapters.indexOf(chap);
       const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
-      const btn = el("div", chap.classList.contains("aktif") ? "aktif" : "", getChapLabel(entry?.title.$t || "", entry?.category?.map(c => c.term) || [], i));
+      const labels = entry?.category?.map(c => c.term) || [];
+
+      const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+
+      if (labels.map(l => l.toLowerCase()).includes("chapter")) {
+        chapterCounter++;
+      }
+
+      const btn = el("div", chap.classList.contains("aktif") ? "aktif" : "", label);
       btn.dataset.indeksKonten = idx;
       btn.onclick = async () => {
         await activateChap(idx, true);
@@ -174,6 +187,7 @@ const buildGallery = async (volIdx) => {
       };
       D.modalChapList.appendChild(btn);
     });
+
     D.modalChap.classList.add("aktif");
   };
 
@@ -225,20 +239,20 @@ const buildGallery = async (volIdx) => {
           list.style.display = "none";
         } else {
           let chapterCounter = 1;
-chaps.forEach((chap) => {
-  const idx = D.chapters.indexOf(chap);
-  const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
-  const labels = entry?.category?.map(c => c.term) || [];
-  const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+          chaps.forEach((chap) => {
+            const idx = D.chapters.indexOf(chap);
+            const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
+            const labels = entry?.category?.map(c => c.term) || [];
+            const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
 
-  if (labels.map(l => l.toLowerCase()).includes("chapter")) {
-    chapterCounter++;
-  }
+            if (labels.map(l => l.toLowerCase()).includes("chapter")) {
+              chapterCounter++;
+            }
 
-  const btn = el("div", "", label);
-  btn.dataset.indeksKonten = idx;
-  list.appendChild(btn);
-});
+            const btn = el("div", "", label);
+            btn.dataset.indeksKonten = idx;
+            list.appendChild(btn);
+          });
           header.onclick = () => {
             const isOpen = box.classList.contains("terbuka");
             $$(".volume-bab", D.sideNav).forEach(v => v.classList.remove("terbuka"));
@@ -285,12 +299,17 @@ chaps.forEach((chap) => {
     });
 
     D.closeModalBtn.onclick = hideChapModal;
-    D.modalChap.onclick = e => { if (e.target === D.modalChap) hideChapModal(); };
+    D.modalChap.onclick = e => {
+      if (e.target === D.modalChap) hideChapModal();
+    };
 
     if (!$(".tombol-gulir.kiri", D.galleryWrap)) {
       ["⬅", "➡"].forEach((symbol, i) => {
         const btn = el("button", `tombol-gulir ${i ? "kanan" : "kiri"}`, symbol);
-        btn.onclick = () => D.gallery.scrollBy({ left: (i ? 1 : -1) * 250, behavior: "smooth" });
+        btn.onclick = () => D.gallery.scrollBy({
+          left: (i ? 1 : -1) * 250,
+          behavior: "smooth"
+        });
         D.galleryWrap.appendChild(btn);
       });
     }
@@ -301,7 +320,10 @@ chaps.forEach((chap) => {
       const overlay = el("div", "kotak-cahaya");
       const clone = el("img");
       const fullSrc = img.dataset.fullres || img.src;
-      Object.assign(clone, { src: fullSrc, alt: img.alt });
+      Object.assign(clone, {
+        src: fullSrc,
+        alt: img.alt
+      });
       overlay.appendChild(clone);
       D.body.appendChild(overlay);
       overlay.onclick = () => overlay.remove();
@@ -340,16 +362,16 @@ chaps.forEach((chap) => {
     });
 
     D.tombolMulaiBaca.onclick = async () => {
-  D.kontenBaca.classList.remove("konten-tersembunyi-awal");
-  D.modalChap.classList.remove("konten-tersembunyi-awal");
-  D.tombolMulaiBaca.style.display = "none";
-  D.tombolVolumeTerbaru.style.display = "none";
-  await initContent();
-  await activateChap(0, true); // Force to first chapter (index 0)
-  const vol = D.chapters[0].closest(".volume-bab");
-  const vi = D.volumes.indexOf(vol);
-  if (vi !== -1) buildGallery(vi);
-};
+      D.kontenBaca.classList.remove("konten-tersembunyi-awal");
+      D.modalChap.classList.remove("konten-tersembunyi-awal");
+      D.tombolMulaiBaca.style.display = "none";
+      D.tombolVolumeTerbaru.style.display = "none";
+      await initContent();
+      await activateChap(0, true); // Force to first chapter (index 0)
+      const vol = D.chapters[0].closest(".volume-bab");
+      const vi = D.volumes.indexOf(vol);
+      if (vi !== -1) buildGallery(vi);
+    };
 
     D.tombolVolumeTerbaru.onclick = async () => {
       D.kontenBaca.classList.remove("konten-tersembunyi-awal");
@@ -367,6 +389,9 @@ chaps.forEach((chap) => {
   };
 
   const initContent = async () => {
+    // Tampilkan loading overlay
+    D.loadingOverlay.classList.remove("hidden");
+
     $$(".volume-bab").forEach((vol, vi) => {
       D.volumes[vi] = vol;
       $$("section.konten-bab", vol).forEach(chap => {
@@ -400,6 +425,8 @@ chaps.forEach((chap) => {
       }
       scrollToMain();
     }
+    // Sembunyikan loading overlay setelah semua selesai dimuat dan ditampilkan
+    D.loadingOverlay.classList.add("hidden");
   };
 
   const initApp = () => {
@@ -408,7 +435,13 @@ chaps.forEach((chap) => {
     D.tombolMulaiBaca.style.display = "block";
     D.tombolVolumeTerbaru.style.display = "block";
     initInteractions();
+    // Di sini kita tidak memanggil initContent, jadi loading overlay harus disembunyikan jika tidak ada aktivasi awal.
+    // Jika tombol "Mulai Baca" atau "Volume Terbaru" ditekan, barulah initContent dipanggil dan mengurus loading.
+    // Jadi, secara default, loading overlay harus tersembunyi kecuali saat proses loading aktif.
+    // Pastikan loading overlay tersembunyi saat aplikasi pertama kali dimuat jika tidak langsung memuat konten.
+    D.loadingOverlay.classList.add("hidden");
   };
 
+  // Panggil initApp saat DOM siap
   initApp();
 });
