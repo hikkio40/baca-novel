@@ -1,13 +1,4 @@
 /*============================================
-Tombol Baca
-=============================================*/
-.konten-tersembunyi-awal { display: none; }
-.area-tombol-aksi { position: absolute; bottom: var(--spasi-besar); right: var(--spasi-besar); display: flex; flex-wrap: wrap; gap: var(--spasi-dasar); justify-content: flex-end; }
-.tombol-mulai-baca,
-.tombol-volume-terbaru { padding: var(--spasi-dasar) var(--spasi-besar); font-size: 1.05em; font-weight: 600; border: 1px solid var(--warna-garis-batas); background-color: #fff; color: var(--warna-dasar-teks); border-radius: var(--radius-kecil); cursor: pointer; transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.tombol-mulai-baca:hover,
-.tombol-volume-terbaru:hover { background-color: var(--warna-hover-item); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
-/*============================================
 Post Dalam
 =============================================*/
 .pembungkus-aplikasi { width: 100%; max-width: 1000px; margin: auto; }
