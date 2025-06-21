@@ -60,19 +60,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     // Fungsi untuk menggulir ke elemen target dengan requestAnimationFrame
+    // Fungsi ini akan dihapus/dibiarkan kosong karena semua pemanggilan dihapus
     const scrollToElement = (targetElement, behavior = "smooth") => {
-        if (!targetElement) return;
-
-        // Gunakan requestAnimationFrame untuk memastikan DOM siap dan menghindari jank
-        requestAnimationFrame(() => {
-            const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--spasi-besar")) || 0;
-            const targetScrollPosition = targetElement.getBoundingClientRect().top + window.pageYOffset - gap;
-
-            window.scrollTo({
-                top: targetScrollPosition,
-                behavior: behavior
-            });
-        });
+        // Logika scroll dihapus
+        return;
     };
 
     // Fungsi untuk mendapatkan label bab yang diformat
@@ -157,10 +148,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const sideNavChapBtn = $(`[data-indeks-konten="${activeIndex}"]`, D.sideNav);
         if (sideNavChapBtn) {
             sideNavChapBtn.classList.add("aktif");
-            // Gulir sideNav agar bab aktif terlihat
-            if (!isMob()) { // Hanya untuk desktop sideNav
-                sideNavChapBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
+            // Gulir sideNav agar bab aktif terlihat - Dihapus
+            // if (!isMob()) {
+            //     sideNavChapBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // }
         }
 
         // Update modal chapter button
@@ -181,9 +172,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         $$(".tombol-volume", D.mobVolNav).forEach((btn, i) => {
             const isActive = i === activeVolumeIndex;
             btn.classList.toggle("aktif", isActive);
-            if (isActive && isMob()) {
-                btn.scrollIntoView({ behavior: 'smooth', inline: 'center' });
-            }
+            // Gulir mobVolNav agar tombol aktif terlihat - Dihapus
+            // if (isActive && isMob()) {
+            //     btn.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+            // }
         });
         
         // Perbarui galeri jika volume berubah
@@ -244,8 +236,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Mengaktifkan bab tertentu: Hanya mengubah status data dan memuat konten
     const activateChap = async (index) => {
         if (isActivating || index < 0 || index >= D.chapters.length) return;
-        
-        // Pengecekan tambahan: jika bab sudah aktif dan konten sudah dimuat, cukup update UI
         if (D.activeChapterIndex === index && D.chapters[index].dataset.loaded) {
             updateNavUI();
             return;
@@ -294,14 +284,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             button.onclick = async () => {
                 await activateChap(chapterIndex);
                 hideChapModal();
-                scrollToElement(D.chapters[chapterIndex]); // Gulir setelah modal ditutup dan bab diaktifkan
+                // scrollToElement(D.chapters[chapterIndex]); // Gulir setelah modal ditutup dan bab diaktifkan - Dihapus
             };
             D.modalChapList.appendChild(button);
         });
 
         D.modalChap.classList.add("aktif");
-        // Gulir ke galeri saat modal bab muncul
-        scrollToElement(D.galleryWrap);
+        // Gulir ke galeri saat modal bab muncul - Dihapus
+        // scrollToElement(D.galleryWrap);
     };
 
     // Menyembunyikan modal daftar bab
@@ -328,12 +318,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                     button.dataset.indeksKonten = D.chapters.indexOf(chaptersInVolume[0]);
                     button.onclick = () => {
                         activateChap(+button.dataset.indeksKonten);
-                        scrollToElement(D.chapters[D.activeChapterIndex]);
+                        // scrollToElement(D.chapters[D.activeChapterIndex]); // Dihapus
                     };
                 } else {
                     button.onclick = () => {
                         showChapModal(volumeIndex);
-                        // Guliran ke D.galleryWrap sudah ditangani di dalam showChapModal
+                        // Guliran ke D.galleryWrap sudah ditangani di dalam showChapModal - Dihapus
                     };
                 }
                 D.mobVolNav.appendChild(button);
@@ -351,7 +341,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     header.dataset.indeksKonten = D.chapters.indexOf(chaptersInVolume[0]);
                     header.onclick = () => {
                         activateChap(+header.dataset.indeksKonten);
-                        scrollToElement(D.chapters[D.activeChapterIndex]);
+                        // scrollToElement(D.chapters[D.activeChapterIndex]); // Dihapus
                     };
                     chapterList.style.display = "none";
                 } else {
@@ -370,7 +360,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         chapterButton.dataset.indeksKonten = chapterIndex;
                         chapterButton.onclick = async () => {
                             await activateChap(chapterIndex);
-                            scrollToElement(D.chapters[chapterIndex]);
+                            // scrollToElement(D.chapters[chapterIndex]); // Dihapus
                         };
                         chapterList.appendChild(chapterButton);
                     });
@@ -380,7 +370,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         if (!isOpen) { // Hanya buka jika sebelumnya tertutup
                             volumeBox.classList.add("terbuka");
                             buildGallery(volumeIndex);
-                            scrollToElement(D.galleryWrap); // Gulir ke galeri saat volume dibuka
+                            // scrollToElement(D.galleryWrap); // Gulir ke galeri saat volume dibuka - Dihapus
                         }
                     };
                 }
@@ -442,10 +432,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 buildNav(); // Bangun ulang navigasi untuk adaptasi mobile/desktop
                 updateNavUI(); // Perbarui UI navigasi berdasarkan D.activeChapterIndex
                 
-                // Hanya gulir jika ada bab aktif dan konten baca sudah tidak tersembunyi
-                if (D.activeChapterIndex !== -1 && D.chapters[D.activeChapterIndex]) {
-                    scrollToElement(D.chapters[D.activeChapterIndex], "instant"); // Gulir instan saat resize
-                }
+                // Logika scroll dihapus di sini
             }, 250);
         });
 
@@ -456,11 +443,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             D.tombolMulaiBaca.style.display = "none";
             D.tombolVolumeTerbaru.style.display = "none";
             
-            await initContent(true); // Kirim flag untuk menandakan aksi mulai baca
+            await initContent(); // Pastikan data dan UI dasar terisi
             
             // Aktifkan bab PERTAMA (indeks 0)
             await activateChap(0); 
-            scrollToElement(D.chapters[0]); // Gulir langsung ke bab pertama
+            // scrollToElement(D.chapters[0]); // Gulir langsung ke bab pertama - Dihapus
         };
 
         D.tombolVolumeTerbaru.onclick = async () => {
@@ -469,7 +456,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             D.tombolMulaiBaca.style.display = "none";
             D.tombolVolumeTerbaru.style.display = "none";
             
-            await initContent(true); // Kirim flag untuk menandakan aksi mulai baca
+            await initContent(); // Pastikan data dan UI dasar terisi
             
             const lastVolumeIndex = D.volumes.length - 1;
             if (lastVolumeIndex !== -1) {
@@ -480,13 +467,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else {
                 await activateChap(0); // Fallback ke bab pertama jika tidak ada volume
             }
-            scrollToElement(D.galleryWrap); // Gulir ke galeri
+            // scrollToElement(D.galleryWrap); // Gulir ke galeri - Dihapus
         };
     };
 
     // Inisialisasi konten aplikasi (memuat data dan membangun UI)
-    // Tambahkan parameter `isUserInitiatedScroll`
-    const initContent = async (isUserInitiatedScroll = false) => {
+    const initContent = async () => {
         D.loadingOverlay.classList.remove("hidden");
 
         // --- PENTING: Kumpulkan semua elemen volume dan bab sebelum fetchFeed ---
@@ -515,18 +501,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Setelah data dimuat dan bab aktif ditetapkan, bangun navigasi
         buildNav(); 
         
-        // Hanya gulir ke bab aktif jika ini bukan inisialisasi awal
-        // atau jika inisialisasi dipicu oleh tombol "Mulai Baca" / "Volume Terbaru".
-        // Ini mencegah auto-scroll saat refresh halaman jika belum ada interaksi.
-        if (isUserInitiatedScroll || localStorage.getItem(LAST_READ_KEY) !== null) {
-            if (D.activeChapterIndex !== -1 && D.chapters[D.activeChapterIndex]) {
-                scrollToElement(D.chapters[D.activeChapterIndex]);
-            } else if (D.galleryWrap && D.galleryWrap.offsetHeight > 0) {
-                scrollToElement(D.galleryWrap);
-            } else {
-                scrollToElement(D.mainContent);
-            }
-        }
+        // Logika scroll dihapus di sini
         
         D.loadingOverlay.classList.add("hidden");
     };
@@ -536,20 +511,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         D.kontenBaca.classList.add("konten-tersembunyi-awal");
         D.modalChap.classList.add("konten-tersembunyi-awal");
         
-        // Periksa apakah ada bab terakhir yang dibaca
         const lastReadIndex = loadLastReadChapter();
+        // Cek apakah ada bab terakhir yang dibaca DAN ada elemen bab yang sesuai
         if (localStorage.getItem(LAST_READ_KEY) !== null && lastReadIndex !== -1 && D.chapters[lastReadIndex]) {
-            // Jika ada bab terakhir yang dibaca, tampilkan konten dan inisialisasi
+            // Jika ada riwayat, langsung tampilkan konten dan inisialisasi
             D.tombolMulaiBaca.style.display = "none";
             D.tombolVolumeTerbaru.style.display = "none";
             D.kontenBaca.classList.remove("konten-tersembunyi-awal");
             D.modalChap.classList.remove("konten-tersembunyi-awal");
-            initContent(false); // Jangan paksa scroll jika sudah ada riwayat
+            initContent(); // Panggil initContent tanpa parameter scroll
         } else {
-            // Jika tidak ada bab terakhir yang dibaca, tampilkan tombol awal
+            // Jika tidak ada riwayat, tampilkan tombol awal
             D.tombolMulaiBaca.style.display = "block";
             D.tombolVolumeTerbaru.style.display = "block";
-            D.loadingOverlay.classList.add("hidden"); // Pastikan loading overlay hilang jika tombol ditampilkan
+            D.loadingOverlay.classList.add("hidden");
         }
         
         initInteractions();
