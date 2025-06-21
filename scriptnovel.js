@@ -1,447 +1,544 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  const $ = (s, p = document) => p.querySelector(s);
-  const $$ = (s, p = document) => [...p.querySelectorAll(s)];
-  const el = (tag, cls = "", txt = "") => {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (txt) e.textContent = txt;
-    return e;
-  };
-
-  const getThumbnailSrc = (src) => src.replace(/\/s\d+\//, "/s400/");
-  const getFullResSrc = (src) => src.replace(/\/s\d+\//, "/s16000/"); // atau "/s0/"
-
-  const D = {
-    appWrap: $(".pembungkus-aplikasi"),
-    sideNav: $(".sisi-navigasi"),
-    mainContent: $("main.konten-utama"),
-    gallery: $(".galeri-utama"),
-    galleryWrap: $(".wadah-galeri-dengan-tombol"),
-    body: document.body,
-    modalChap: $("#modalBab"),
-    closeModalBtn: $(".tutup-modal"),
-    modalVolTitle: $("#judulVolumeModal"),
-    modalChapList: $("#daftarBabModal"),
-    mobVolNav: $(".navigasi-volume-mobile"),
-    chapters: [],
-    volumes: [],
-    feed: [],
-    tombolMulaiBaca: $("#tombolMulaiBaca"),
-    tombolVolumeTerbaru: $("#tombolVolumeTerbaru"),
-    kontenBaca: $("#kontenBaca"),
-    // Tambahkan referensi loading overlay di sini
-    loadingOverlay: $("#loadingOverlay")
-  };
-
-  let isActivating = false;
-  let preventScroll = false;
-  const isMob = () => window.matchMedia("(max-width: 768px)").matches;
-
-  const LAST_READ_KEY = "lastReadChapterIndex";
-  const saveLastReadChapter = (index) => localStorage.setItem(LAST_READ_KEY, index.toString());
-  const loadLastReadChapter = () => {
-    const i = parseInt(localStorage.getItem(LAST_READ_KEY), 10);
-    return (!isNaN(i) && i >= 0 && i < D.chapters.length) ? i : 0;
-  };
-
-  const scrollToMain = () => {
-    if (preventScroll) return (preventScroll = false);
-    const offsetTop = D.mainContent.getBoundingClientRect().top + window.pageYOffset;
-    const gHeight = D.galleryWrap?.offsetHeight || 0;
-    const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--spasi-besar"));
-    window.scrollTo({ top: offsetTop - gHeight - gap, behavior: "smooth" });
-  };
-
-  const getChapLabel = (title, labels, chapterCounter) => {
-    const special = {
-      prologue: "Prolog",
-      interlude: "Interlude",
-      bonus: "Bonus",
-      epilogue: "Epilog",
-      afterword: "Penutup"
+    // Fungsi pembantu untuk seleksi DOM dan pembuatan elemen
+    const $ = (selector, parent = document) => parent.querySelector(selector);
+    const $$ = (selector, parent = document) => [...parent.querySelectorAll(selector)];
+    const el = (tag, className = "", textContent = "") => {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (textContent) element.textContent = textContent;
+        return element;
     };
 
-    const lowerLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
-    const type = lowerLabels.find(l => special[l]);
+    // Fungsi untuk mendapatkan URL gambar thumbnail dan resolusi penuh dari Blogger
+    const getThumbnailSrc = (src) => {
+        if (!src) return '';
+        return src.replace(/(\/s)(\d+)(\/)/, '$1400$3').replace(/(\/s0)(\/)/, '$1400$2');
+    };
 
-    if (type) {
-      return `${special[type]}: ${title || "Tanpa Judul"}`;
-    } else if (lowerLabels.includes("chapter")) {
-      return `Bab ${chapterCounter}: ${title || "Tanpa Judul"}`;
-    } else {
-      return title || "Tanpa Judul";
-    }
-  };
+    const getFullResSrc = (src) => {
+        if (!src) return '';
+        return src.replace(/(\/s)(\d+)(\/)/, '$10$3');
+    };
 
-  const fetchFeed = async () => {
-    try {
-      const res = await fetch("https://script.google.com/macros/s/AKfycbxcZd9hPNfu5wdLKrFM81-Kw4Fp1JSNp4R1fcf-fJako-pBOvXjSKp0hajj0KoAdNTXbA/exec?url=" +
-        encodeURIComponent("https://etdsf.blogspot.com/feeds/posts/default?alt=json"));
-      const data = await res.json();
-      D.feed = data.feed.entry || [];
-    } catch (e) {
-      alert("Gagal memuat daftar cerita. Coba lagi nanti.");
-    }
-  };
+    // Objek untuk menyimpan referensi elemen DOM dan data aplikasi
+    const D = {
+        appWrap: $(".pembungkus-aplikasi"),
+        sideNav: $(".sisi-navigasi"),
+        mainContent: $("main.konten-utama"),
+        gallery: $(".galeri-utama"),
+        galleryWrap: $(".wadah-galeri-dengan-tombol"),
+        navGalleryTop: $(".navigasi-galeri-atas"),
+        judulGaleri: $(".judul-galeri"),
+        body: document.body,
+        modalChap: $("#modalBab"),
+        closeModalBtn: $(".tutup-modal"),
+        modalVolTitle: $("#judulVolumeModal"),
+        modalChapList: $("#daftarBabModal"),
+        mobVolNav: $(".navigasi-volume-mobile"),
+        tombolMulaiBaca: $("#tombolMulaiBaca"),
+        tombolVolumeTerbaru: $("#tombolVolumeTerbaru"),
+        kontenBaca: $("#kontenBaca"),
+        loadingOverlay: $("#loadingOverlay"),
+        chapters: [], // Array of chapter DOM elements
+        volumes: [],    // Array of volume DOM elements
+        feed: [],       // Array of fetched blog post entries
+        activeChapterIndex: -1, // Menyimpan indeks bab yang sedang aktif
+    };
 
-  const loadChapContent = async (chapEl) => {
-    if (chapEl.dataset.loaded) return;
-    chapEl.innerHTML = `<p style="text-align:center; padding:20px; color:#888">Memuat konten...</p>`;
-    const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chapEl.dataset.url);
-    chapEl.innerHTML = entry ? `<h3>${entry.title.$t}</h3>${entry.content.$t}` :
-      `<p style="color:red; padding:20px;">Konten tidak ditemukan.</p>`;
-    chapEl.dataset.loaded = "true";
-  };
+    let isActivating = false; // Flag untuk mencegah aktivasi bab ganda saat proses loading/UI update
 
-  const updateActiveChapState = (idx) => {
-    D.chapters.forEach((chap, i) => {
-      const isActive = i === idx;
-      chap.classList.toggle("aktif", isActive);
-      $(`[data-indeks-konten="${i}"]`, D.sideNav)?.classList.toggle("aktif", isActive);
-      $(`[data-indeks-konten="${i}"]`, D.modalChapList)?.classList.toggle("aktif", isActive);
-      $(`[data-indeks-konten="${i}"]`, D.mobVolNav)?.classList.toggle("aktif", isActive);
-    });
-  };
+    // Deteksi mobile
+    const isMob = () => window.matchMedia("(max-width: 768px)").matches;
 
-  const buildGallery = async (volIdx) => {
-    D.gallery.innerHTML = "";
-    D.gallery.dataset.volumeIndex = volIdx;
+    // Kunci localStorage untuk bab terakhir yang dibaca
+    const LAST_READ_KEY = "lastReadChapterIndex";
+    const saveLastReadChapter = (index) => localStorage.setItem(LAST_READ_KEY, index.toString());
+    const loadLastReadChapter = () => {
+        const index = parseInt(localStorage.getItem(LAST_READ_KEY), 10);
+        // Pastikan indeks yang dimuat valid dalam `D.chapters.length`
+        return (!isNaN(index) && index >= 0 && index < D.chapters.length) ? index : 0;
+    };
 
-    const chapters = $$("section.konten-bab", D.volumes[volIdx]);
-    let chapterCounter = 1;
+    // Fungsi untuk menggulir ke elemen target dengan requestAnimationFrame
+    const scrollToElement = (targetElement, behavior = "smooth") => {
+        if (!targetElement) return;
 
-    for (const chap of chapters) {
-      const url = chap.dataset.url;
-      const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === url);
-      if (!entry) continue;
+        // Gunakan requestAnimationFrame untuk memastikan DOM siap dan menghindari jank
+        requestAnimationFrame(() => {
+            const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--spasi-besar")) || 0;
+            const targetScrollPosition = targetElement.getBoundingClientRect().top + window.pageYOffset - gap;
 
-      const labels = entry?.category?.map(c => c.term) || [];
-      const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
-      if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
+            window.scrollTo({
+                top: targetScrollPosition,
+                behavior: behavior
+            });
+        });
+    };
 
-      const badge = label.split(":")[0] || "Bab";
+    // Fungsi untuk mendapatkan label bab yang diformat
+    const getChapLabel = (title, labels, chapterCounter) => {
+        const specialLabels = {
+            prologue: "Prolog",
+            interlude: "Interlude",
+            bonus: "Bonus",
+            epilogue: "Epilog",
+            afterword: "Penutup"
+        };
 
-      // Buat DOM parser buat ambil <img> dari entry.content
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(entry.content.$t, "text/html");
-      const images = [...doc.querySelectorAll("img")].filter(img => {
-        const style = getComputedStyle(img);
-        return style.display !== "none" || img.classList.contains("galeri-saja");
-      });
+        const lowerCaseLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
+        const foundType = lowerCaseLabels.find(l => specialLabels[l]);
 
-      for (const img of images) {
-        const card = el("div", "kartu-gambar");
-        const lencana = el("div", `lencana-bab ${badge.toLowerCase().replace(/\s/g, "-")}`, badge);
-        const clone = el("img");
-        clone.src = getThumbnailSrc(img.src);
-        clone.dataset.fullres = getFullResSrc(img.src);
-        clone.alt = img.alt;
-        card.append(lencana, clone);
-        D.gallery.appendChild(card);
-      }
-    }
-  };
-
-  const activateChap = async (idx, scroll = true) => {
-    if (isActivating || idx < 0 || idx >= D.chapters.length) return;
-    isActivating = true;
-    updateActiveChapState(idx);
-    await loadChapContent(D.chapters[idx]);
-    saveLastReadChapter(idx);
-    if (scroll) scrollToMain();
-    isActivating = false;
-  };
-
-  const showChapModal = (volIdx) => {
-    const vol = D.volumes[volIdx];
-    const chapters = $$("section.konten-bab", vol);
-    if (chapters.length === 1) {
-      activateChap(D.chapters.indexOf(chapters[0]), true);
-      hideChapModal();
-      buildGallery(volIdx);
-      return;
-    }
-
-    D.modalVolTitle.textContent = vol.dataset.volume || `Volume ${volIdx + 1}`;
-    D.modalChapList.innerHTML = "";
-
-    let chapterCounter = 1;
-
-    chapters.forEach((chap) => {
-      const idx = D.chapters.indexOf(chap);
-      const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
-      const labels = entry?.category?.map(c => c.term) || [];
-
-      const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
-
-      if (labels.map(l => l.toLowerCase()).includes("chapter")) {
-        chapterCounter++;
-      }
-
-      const btn = el("div", chap.classList.contains("aktif") ? "aktif" : "", label);
-      btn.dataset.indeksKonten = idx;
-      btn.onclick = async () => {
-        await activateChap(idx, true);
-        hideChapModal();
-        buildGallery(volIdx);
-      };
-      D.modalChapList.appendChild(btn);
-    });
-
-    D.modalChap.classList.add("aktif");
-  };
-
-  const hideChapModal = () => D.modalChap.classList.remove("aktif");
-
-  const buildNav = () => {
-    D.sideNav.innerHTML = '';
-    D.mobVolNav.innerHTML = '';
-    const isMobile = isMob();
-    D.volumes.forEach((vol, vi) => {
-      const chaps = $$("section.konten-bab", vol);
-      const single = chaps.length === 1;
-      const title = vol.dataset.volume || `Volume ${vi + 1}`;
-
-      if (isMobile) {
-        const btn = el("button", "tombol-volume", title);
-        btn.dataset.volumeIndex = vi;
-        if (single) {
-          btn.classList.add("satu-bab");
-          btn.dataset.indeksKonten = D.chapters.indexOf(chaps[0]);
-          btn.onclick = () => {
-            activateChap(+btn.dataset.indeksKonten, true);
-            buildGallery(vi);
-          };
+        if (foundType) {
+            return `${specialLabels[foundType]}: ${title || "Tanpa Judul"}`;
+        } else if (lowerCaseLabels.includes("chapter")) {
+            return `Bab ${chapterCounter}: ${title || "Tanpa Judul"}`;
         } else {
-          btn.onclick = () => {
-            $$(".tombol-volume", D.mobVolNav).forEach(b => b.classList.remove("aktif"));
-            btn.classList.add("aktif");
-            showChapModal(vi);
-            buildGallery(vi);
-          };
+            return title || "Tanpa Judul";
         }
-        D.mobVolNav.appendChild(btn);
-      } else {
-        const box = el("div", "volume-bab");
-        const header = el("div", "judul-volume", title);
-        const arrow = el("span", "panah-akordeon");
-        const list = el("div", "daftar-bab");
+    };
 
-        header.appendChild(arrow);
-        if (single) {
-          box.classList.add("satu-bab");
-          arrow.style.display = "none";
-          header.dataset.indeksKonten = D.chapters.indexOf(chaps[0]);
-          header.onclick = () => {
-            activateChap(+header.dataset.indeksKonten, true);
-            buildGallery(vi);
-          };
-          list.style.display = "none";
+    // Mengambil feed postingan dari Blogger melalui Google Apps Script
+    const fetchFeed = async () => {
+        try {
+            D.loadingOverlay.classList.remove("hidden");
+            const response = await fetch("https://script.google.com/macros/s/AKfycbxcZd9hPNfu5wdLKrFM81-Kw4Fp1JSNp4R1fcf-fJako-pBOvXjSKp0hajj0KoAdNTXbA/exec?url=" +
+                encodeURIComponent("https://etdsf.blogspot.com/feeds/posts/default?alt=json"));
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            D.feed = data.feed.entry || [];
+        } catch (error) {
+            console.error("Gagal memuat daftar cerita:", error);
+            D.mainContent.innerHTML = `<p style="color:red; text-align:center; padding:50px;">
+                Maaf, gagal memuat daftar cerita. Silakan coba lagi nanti atau periksa koneksi internet Anda.
+            </p>`;
+        } finally {
+            D.loadingOverlay.classList.add("hidden");
+        }
+    };
+
+    // Memuat konten bab dari feed
+    const loadChapContent = async (chapterElement) => {
+        if (chapterElement.dataset.loaded) return;
+
+        chapterElement.innerHTML = `<p style="text-align:center; padding:20px; color:#888;">Memuat konten...</p>`;
+
+        const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chapterElement.dataset.url);
+
+        if (entry) {
+            const cleanedContent = entry.content.$t.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+            chapterElement.innerHTML = `<h3>${entry.title.$t}</h3>${cleanedContent}`;
         } else {
-          let chapterCounter = 1;
-          chaps.forEach((chap) => {
-            const idx = D.chapters.indexOf(chap);
-            const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chap.dataset.url);
+            chapterElement.innerHTML = `<p style="color:red; padding:20px; text-align:center;">Konten bab tidak ditemukan untuk URL: ${chapterElement.dataset.url}</p>`;
+        }
+        chapterElement.dataset.loaded = "true";
+    };
+
+    // Memperbarui status aktif untuk semua elemen navigasi bab
+    const updateNavUI = () => {
+        const activeIndex = D.activeChapterIndex;
+
+        // Reset semua status aktif
+        $$(".konten-bab").forEach(chap => chap.classList.remove("aktif"));
+        $$(`[data-indeks-konten]`, D.sideNav).forEach(btn => btn.classList.remove("aktif"));
+        $$(`[data-indeks-konten]`, D.modalChapList).forEach(btn => btn.classList.remove("aktif"));
+        $$(".tombol-volume", D.mobVolNav).forEach(btn => btn.classList.remove("aktif"));
+
+        if (activeIndex === -1 || activeIndex >= D.chapters.length) {
+            // Tidak ada bab aktif, atau indeks tidak valid
+            return;
+        }
+
+        const activeChapterElement = D.chapters[activeIndex];
+        activeChapterElement.classList.add("aktif");
+
+        // Update sideNav chapter button
+        const sideNavChapBtn = $(`[data-indeks-konten="${activeIndex}"]`, D.sideNav);
+        if (sideNavChapBtn) {
+            sideNavChapBtn.classList.add("aktif");
+            // Gulir sideNav agar bab aktif terlihat
+            if (!isMob()) { // Hanya untuk desktop sideNav
+                sideNavChapBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        // Update modal chapter button
+        const modalChapBtn = $(`[data-indeks-konten="${activeIndex}"]`, D.modalChapList);
+        if (modalChapBtn) {
+            modalChapBtn.classList.add("aktif");
+        }
+
+        // Handle volume states for both sideNav and mobVolNav
+        const activeVolumeElement = activeChapterElement.closest(".volume-bab");
+        const activeVolumeIndex = D.volumes.indexOf(activeVolumeElement);
+
+        $$(".volume-bab", D.sideNav).forEach((volBox, i) => {
+            const isOpen = i === activeVolumeIndex && !isMob(); // Hanya buka di desktop
+            volBox.classList.toggle("terbuka", isOpen);
+        });
+
+        $$(".tombol-volume", D.mobVolNav).forEach((btn, i) => {
+            const isActive = i === activeVolumeIndex;
+            btn.classList.toggle("aktif", isActive);
+            if (isActive && isMob()) {
+                btn.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+            }
+        });
+        
+        // Perbarui galeri jika volume berubah
+        if (activeVolumeIndex !== -1 && (+D.gallery.dataset.volumeIndex !== activeVolumeIndex)) {
+            buildGallery(activeVolumeIndex);
+        }
+    };
+
+    // Membangun dan mengisi galeri ilustrasi untuk volume tertentu
+    const buildGallery = async (volumeIndex) => {
+        if (volumeIndex === -1 || volumeIndex >= D.volumes.length) return;
+
+        D.gallery.innerHTML = "";
+        D.gallery.dataset.volumeIndex = volumeIndex;
+
+        const volumeElement = D.volumes[volumeIndex];
+        const volumeName = volumeElement.dataset.volume || `Volume ${volumeIndex + 1}`;
+
+        D.judulGaleri.textContent = `Ilustrasi ${volumeName}`;
+
+        const chaptersInVolume = $$("section.konten-bab", volumeElement);
+        let chapterCounter = 1;
+
+        for (const chapter of chaptersInVolume) {
+            const url = chapter.dataset.url;
+            const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === url);
+            if (!entry) continue;
+
             const labels = entry?.category?.map(c => c.term) || [];
-            const label = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+            const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+            if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
+
+            const badgeText = chapterLabel.split(":")[0]?.trim() || "Bab";
+            const badgeClass = badgeText.toLowerCase().replace(/\s/g, "-");
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(entry.content.$t, "text/html");
+            const images = [...doc.querySelectorAll("img")].filter(img => {
+                const style = getComputedStyle(img);
+                return style.display !== "none" || img.classList.contains("galeri-saja");
+            });
+
+            for (const img of images) {
+                const card = el("div", "kartu-gambar");
+                const badge = el("div", `lencana-bab ${badgeClass}`, badgeText);
+                const imageClone = el("img");
+
+                imageClone.src = getThumbnailSrc(img.src);
+                imageClone.dataset.fullres = getFullResSrc(img.src);
+                imageClone.alt = img.alt || `Ilustrasi dari ${chapterLabel}`;
+
+                card.append(badge, imageClone);
+                D.gallery.appendChild(card);
+            }
+        }
+    };
+
+    // Mengaktifkan bab tertentu: Hanya mengubah status data dan memuat konten
+    const activateChap = async (index) => {
+        if (isActivating || index < 0 || index >= D.chapters.length) return;
+        if (D.activeChapterIndex === index) { // Jika sudah aktif, hanya update UI dan return
+            updateNavUI();
+            return;
+        }
+
+        isActivating = true;
+        D.activeChapterIndex = index;
+        saveLastReadChapter(index);
+
+        const targetChapter = D.chapters[index];
+        await loadChapContent(targetChapter);
+        
+        updateNavUI(); // Perbarui UI navigasi berdasarkan D.activeChapterIndex
+        isActivating = false;
+    };
+
+    // Menampilkan modal daftar bab
+    const showChapModal = (volumeIndex) => {
+        const volume = D.volumes[volumeIndex];
+        const chaptersInVolume = $$("section.konten-bab", volume);
+
+        if (chaptersInVolume.length === 1) {
+            activateChap(D.chapters.indexOf(chaptersInVolume[0]));
+            hideChapModal();
+            return;
+        }
+
+        D.modalVolTitle.textContent = volume.dataset.volume || `Volume ${volumeIndex + 1}`;
+        D.modalChapList.innerHTML = "";
+
+        let chapterCounter = 1;
+
+        chaptersInVolume.forEach((chapter) => {
+            const chapterIndex = D.chapters.indexOf(chapter);
+            const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chapter.dataset.url);
+            const labels = entry?.category?.map(c => c.term) || [];
+
+            const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
 
             if (labels.map(l => l.toLowerCase()).includes("chapter")) {
-              chapterCounter++;
+                chapterCounter++;
             }
 
-            const btn = el("div", "", label);
-            btn.dataset.indeksKonten = idx;
-            list.appendChild(btn);
-          });
-          header.onclick = () => {
-            const isOpen = box.classList.contains("terbuka");
-            $$(".volume-bab", D.sideNav).forEach(v => v.classList.remove("terbuka"));
-            if (!isOpen) {
-              box.classList.add("terbuka");
-              buildGallery(vi);
-            }
-          };
-        }
-        box.append(header, list);
-        D.sideNav.appendChild(box);
-      }
-    });
-  };
-
-  const initInteractions = () => {
-    D.sideNav.addEventListener("click", e => {
-      const btn = e.target.closest("[data-indeks-konten]");
-      if (btn && !isMob()) {
-        const idx = +btn.dataset.indeksKonten;
-        activateChap(idx, true);
-        const volEl = D.chapters[idx].closest(".volume-bab");
-        buildGallery(D.volumes.indexOf(volEl));
-      }
-    });
-
-    D.mobVolNav.addEventListener("click", e => {
-      const btn = e.target.closest(".tombol-volume");
-      if (btn && isMob()) {
-        const volIdx = +btn.dataset.volumeIndex;
-        const chaps = $$("section.konten-bab", D.volumes[volIdx]);
-
-        $$(".tombol-volume", D.mobVolNav).forEach(b => b.classList.remove("aktif"));
-        btn.classList.add("aktif");
-
-        if (chaps.length === 1) {
-          activateChap(D.chapters.indexOf(chaps[0]), true);
-          buildGallery(volIdx);
-        } else {
-          showChapModal(volIdx);
-          buildGallery(volIdx);
-        }
-      }
-    });
-
-    D.closeModalBtn.onclick = hideChapModal;
-    D.modalChap.onclick = e => {
-      if (e.target === D.modalChap) hideChapModal();
-    };
-
-    if (!$(".tombol-gulir.kiri", D.galleryWrap)) {
-      ["⬅", "➡"].forEach((symbol, i) => {
-        const btn = el("button", `tombol-gulir ${i ? "kanan" : "kiri"}`, symbol);
-        btn.onclick = () => D.gallery.scrollBy({
-          left: (i ? 1 : -1) * 250,
-          behavior: "smooth"
+            const button = el("div", D.activeChapterIndex === chapterIndex ? "aktif" : "", chapterLabel);
+            button.dataset.indeksKonten = chapterIndex;
+            button.onclick = async () => {
+                await activateChap(chapterIndex);
+                hideChapModal();
+                scrollToElement(D.chapters[chapterIndex]); // Gulir setelah modal ditutup dan bab diaktifkan
+            };
+            D.modalChapList.appendChild(button);
         });
-        D.galleryWrap.appendChild(btn);
-      });
-    }
 
-    D.gallery.onclick = e => {
-      const img = e.target.closest(".kartu-gambar img");
-      if (!img) return;
-      const overlay = el("div", "kotak-cahaya");
-      const clone = el("img");
-      const fullSrc = img.dataset.fullres || img.src;
-      Object.assign(clone, {
-        src: fullSrc,
-        alt: img.alt
-      });
-      overlay.appendChild(clone);
-      D.body.appendChild(overlay);
-      overlay.onclick = () => overlay.remove();
+        D.modalChap.classList.add("aktif");
+        // Gulir ke galeri saat modal bab muncul
+        scrollToElement(D.galleryWrap); 
     };
 
-    let resizeT;
-    window.addEventListener("resize", () => {
-      clearTimeout(resizeT);
-      resizeT = setTimeout(() => {
-        if (!D.kontenBaca.classList.contains("konten-tersembunyi-awal")) {
-          preventScroll = true;
-          buildNav();
-          if (D.chapters.length > 0) {
-            let idx = D.chapters.findIndex(c => c.classList.contains("aktif"));
-            if (idx === -1) idx = 0;
-            activateChap(idx, false);
-            const vol = D.chapters[idx].closest(".volume-bab");
-            const vi = D.volumes.indexOf(vol);
-            if (vi !== -1) {
-              buildGallery(vi);
-              const isSingle = $$("section.konten-bab", vol).length === 1;
-              if (!isMob()) {
-                const sideVol = $$(".volume-bab", D.sideNav)[vi];
-                if (sideVol && !isSingle) sideVol.classList.add("terbuka");
-              } else {
-                const mobBtn = $$(".tombol-volume", D.mobVolNav)[vi];
-                if (mobBtn) {
-                  $$(".tombol-volume", D.mobVolNav).forEach(b => b.classList.remove("aktif"));
-                  mobBtn.classList.add("aktif");
+    // Menyembunyikan modal daftar bab
+    const hideChapModal = () => D.modalChap.classList.remove("aktif");
+
+    // Membangun navigasi samping (desktop) dan navigasi mobile (gulir horizontal)
+    const buildNav = () => {
+        D.sideNav.innerHTML = '';
+        D.mobVolNav.innerHTML = '';
+
+        const isMobile = isMob();
+
+        D.volumes.forEach((volume, volumeIndex) => {
+            const chaptersInVolume = $$("section.konten-bab", volume);
+            const isSingleChapterVolume = chaptersInVolume.length === 1;
+            const volumeTitle = volume.dataset.volume || `Volume ${volumeIndex + 1}`;
+
+            if (isMobile) {
+                const button = el("button", "tombol-volume", volumeTitle);
+                button.dataset.volumeIndex = volumeIndex;
+
+                if (isSingleChapterVolume) {
+                    button.classList.add("satu-bab");
+                    button.dataset.indeksKonten = D.chapters.indexOf(chaptersInVolume[0]);
+                    button.onclick = () => {
+                        activateChap(+button.dataset.indeksKonten);
+                        scrollToElement(D.chapters[D.activeChapterIndex]);
+                    };
+                } else {
+                    button.onclick = () => {
+                        showChapModal(volumeIndex);
+                        // Guliran ke D.galleryWrap sudah ditangani di dalam showChapModal
+                    };
                 }
-              }
+                D.mobVolNav.appendChild(button);
+            } else { // Desktop navigation
+                const volumeBox = el("div", "volume-bab");
+                const header = el("div", "judul-volume", volumeTitle);
+                const arrow = el("span", "panah-akordeon");
+                const chapterList = el("div", "daftar-bab");
+
+                header.appendChild(arrow);
+
+                if (isSingleChapterVolume) {
+                    volumeBox.classList.add("satu-bab");
+                    arrow.style.display = "none";
+                    header.dataset.indeksKonten = D.chapters.indexOf(chaptersInVolume[0]);
+                    header.onclick = () => {
+                        activateChap(+header.dataset.indeksKonten);
+                        scrollToElement(D.chapters[D.activeChapterIndex]);
+                    };
+                    chapterList.style.display = "none";
+                } else {
+                    let chapterCounter = 1;
+                    chaptersInVolume.forEach((chapter) => {
+                        const chapterIndex = D.chapters.indexOf(chapter);
+                        const entry = D.feed.find(x => x.link.find(l => l.rel === "alternate")?.href === chapter.dataset.url);
+                        const labels = entry?.category?.map(c => c.term) || [];
+                        const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
+
+                        if (labels.map(l => l.toLowerCase()).includes("chapter")) {
+                            chapterCounter++;
+                        }
+
+                        const chapterButton = el("div", "", chapterLabel);
+                        chapterButton.dataset.indeksKonten = chapterIndex;
+                        chapterButton.onclick = async () => {
+                            await activateChap(chapterIndex);
+                            scrollToElement(D.chapters[chapterIndex]);
+                        };
+                        chapterList.appendChild(chapterButton);
+                    });
+                    header.onclick = () => {
+                        const isOpen = volumeBox.classList.contains("terbuka");
+                        $$(".volume-bab", D.sideNav).forEach(v => v.classList.remove("terbuka")); // Tutup semua
+                        if (!isOpen) { // Hanya buka jika sebelumnya tertutup
+                            volumeBox.classList.add("terbuka");
+                            buildGallery(volumeIndex);
+                            scrollToElement(D.galleryWrap); // Gulir ke galeri saat volume dibuka
+                        }
+                    };
+                }
+                volumeBox.append(header, chapterList);
+                D.sideNav.appendChild(volumeBox);
             }
-          }
+        });
+        updateNavUI(); // Pastikan UI navigasi diperbarui setelah dibangun
+    };
+
+    // Menginisialisasi semua interaksi pengguna
+    const initInteractions = () => {
+        D.closeModalBtn.onclick = hideChapModal;
+        D.modalChap.onclick = e => {
+            if (e.target === D.modalChap) hideChapModal();
+        };
+
+        if (!$("#galeriScrollLeftBtn", D.navGalleryTop)) {
+            const scrollLeftBtn = el("button", "tombol-gulir kiri", "⬅");
+            scrollLeftBtn.id = "galeriScrollLeftBtn";
+            scrollLeftBtn.onclick = () => D.gallery.scrollBy({
+                left: -250,
+                behavior: "smooth"
+            });
+            D.navGalleryTop.appendChild(scrollLeftBtn);
+
+            const scrollRightBtn = el("button", "tombol-gulir kanan", "➡");
+            scrollRightBtn.id = "galeriScrollRightBtn";
+            scrollRightBtn.onclick = () => D.gallery.scrollBy({
+                left: 250,
+                behavior: "smooth"
+            });
+            D.navGalleryTop.appendChild(scrollRightBtn);
         }
-      }, 250);
-    });
 
-    D.tombolMulaiBaca.onclick = async () => {
-      D.kontenBaca.classList.remove("konten-tersembunyi-awal");
-      D.modalChap.classList.remove("konten-tersembunyi-awal");
-      D.tombolMulaiBaca.style.display = "none";
-      D.tombolVolumeTerbaru.style.display = "none";
-      await initContent();
-      await activateChap(0, true); // Force to first chapter (index 0)
-      const vol = D.chapters[0].closest(".volume-bab");
-      const vi = D.volumes.indexOf(vol);
-      if (vi !== -1) buildGallery(vi);
+        D.gallery.onclick = e => {
+            const imageElement = e.target.closest(".kartu-gambar img");
+            if (!imageElement) return;
+
+            const overlay = el("div", "kotak-cahaya");
+            const fullImage = el("img");
+            const fullResSrc = imageElement.dataset.fullres || imageElement.src;
+            Object.assign(fullImage, {
+                src: fullResSrc,
+                alt: imageElement.alt
+            });
+            overlay.appendChild(fullImage);
+            D.body.appendChild(overlay);
+            overlay.onclick = () => overlay.remove();
+        };
+
+        let resizeTimeout;
+        window.addEventListener("resize", () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(async () => {
+                // Jangan lakukan resize logic jika konten belum terlihat
+                if (D.kontenBaca.classList.contains("konten-tersembunyi-awal")) return;
+                
+                buildNav(); // Bangun ulang navigasi untuk adaptasi mobile/desktop
+                updateNavUI(); // Perbarui UI navigasi berdasarkan D.activeChapterIndex
+                
+                // Gulir ke bab aktif setelah resize, atau ke galeri jika bab belum dipilih
+                if (D.activeChapterIndex !== -1 && D.chapters[D.activeChapterIndex]) {
+                    scrollToElement(D.chapters[D.activeChapterIndex], "instant"); // Gulir instan saat resize
+                } else if (D.galleryWrap && D.galleryWrap.offsetHeight > 0) {
+                    scrollToElement(D.galleryWrap, "instant");
+                } else {
+                    scrollToElement(D.mainContent, "instant");
+                }
+            }, 250);
+        });
+
+        // Tombol "Mulai Baca" akan selalu mengaktifkan bab pertama (indeks 0)
+        D.tombolMulaiBaca.onclick = async () => {
+            D.kontenBaca.classList.remove("konten-tersembunyi-awal");
+            D.modalChap.classList.remove("konten-tersembunyi-awal");
+            D.tombolMulaiBaca.style.display = "none";
+            D.tombolVolumeTerbaru.style.display = "none";
+            
+            await initContent(); // Pastikan data dan UI dasar terisi
+            
+            // Aktifkan bab PERTAMA (indeks 0)
+            await activateChap(0); 
+            scrollToElement(D.chapters[0]); // Gulir langsung ke bab pertama
+        };
+
+        D.tombolVolumeTerbaru.onclick = async () => {
+            D.kontenBaca.classList.remove("konten-tersembunyi-awal");
+            D.modalChap.classList.remove("konten-tersembunyi-awal");
+            D.tombolMulaiBaca.style.display = "none";
+            D.tombolVolumeTerbaru.style.display = "none";
+            
+            await initContent(); // Pastikan data dan UI dasar terisi
+            
+            const lastVolumeIndex = D.volumes.length - 1;
+            if (lastVolumeIndex !== -1) {
+                const lastVolumeChapters = $$("section.konten-bab", D.volumes[lastVolumeIndex]);
+                if (lastVolumeChapters.length > 0) {
+                    await activateChap(D.chapters.indexOf(lastVolumeChapters[0])); // Aktifkan bab pertama di volume terakhir
+                }
+            } else {
+                await activateChap(0); // Fallback ke bab pertama jika tidak ada volume
+            }
+            scrollToElement(D.galleryWrap); // Gulir ke galeri
+        };
     };
 
-    D.tombolVolumeTerbaru.onclick = async () => {
-      D.kontenBaca.classList.remove("konten-tersembunyi-awal");
-      D.modalChap.classList.remove("konten-tersembunyi-awal");
-      D.tombolMulaiBaca.style.display = "none";
-      D.tombolVolumeTerbaru.style.display = "none";
-      await initContent();
-      const vi = D.volumes.length - 1;
-      const chap = $$("section.konten-bab", D.volumes[vi])[0];
-      if (chap) {
-        await activateChap(D.chapters.indexOf(chap), true);
-        buildGallery(vi);
-      }
-    };
-  };
+    // Inisialisasi konten aplikasi (memuat data dan membangun UI)
+    const initContent = async () => {
+        D.loadingOverlay.classList.remove("hidden");
 
-  const initContent = async () => {
-    // Tampilkan loading overlay
-    D.loadingOverlay.classList.remove("hidden");
+        // --- PENTING: Kumpulkan semua elemen volume dan bab sebelum fetchFeed ---
+        D.volumes = []; // Reset volumes array
+        D.chapters = []; // Reset chapters array
+        $$(".volume-bab").forEach((volumeElement, volumeIndex) => {
+            D.volumes.push(volumeElement); // Add to D.volumes array
+            $$("section.konten-bab", volumeElement).forEach(chapterElement => {
+                chapterElement.dataset.indeks = D.chapters.length; // Ensure index is correct
+                D.chapters.push(chapterElement);
+            });
+        });
 
-    $$(".volume-bab").forEach((vol, vi) => {
-      D.volumes[vi] = vol;
-      $$("section.konten-bab", vol).forEach(chap => {
-        chap.dataset.indeks = D.chapters.length;
-        D.chapters.push(chap);
-      });
-    });
+        await fetchFeed();
 
-    await fetchFeed();
-    preventScroll = true;
-    buildNav();
-
-    if (D.chapters.length > 0) {
-      const idx = loadLastReadChapter();
-      await activateChap(idx, false);
-      const vol = D.chapters[idx].closest(".volume-bab");
-      const vi = D.volumes.indexOf(vol);
-      if (vi !== -1) {
-        buildGallery(vi);
-        const isSingle = $$("section.konten-bab", vol).length === 1;
-        if (!isMob()) {
-          const sideVol = $$(".volume-bab", D.sideNav)[vi];
-          if (sideVol && !isSingle) sideVol.classList.add("terbuka");
+        if (D.feed.length === 0 && D.chapters.length === 0) {
+            D.loadingOverlay.classList.add("hidden");
+            console.warn("Tidak ada data feed atau bab ditemukan. Aplikasi tidak dapat diinisialisasi sepenuhnya.");
+            return;
+        }
+        
+        // Aktifkan bab terakhir yang dibaca saat inisialisasi
+        // Ini HANYA mengatur D.activeChapterIndex dan memuat konten.
+        // Scroll akan dilakukan secara terpisah jika diperlukan (misal: saat refresh).
+        await activateChap(loadLastReadChapter());
+        
+        // Setelah data dimuat dan bab aktif ditetapkan, bangun navigasi
+        buildNav(); 
+        
+        // Gulir ke bab aktif setelah semua UI diinisialisasi untuk pertama kali
+        if (D.activeChapterIndex !== -1 && D.chapters[D.activeChapterIndex]) {
+            scrollToElement(D.chapters[D.activeChapterIndex]);
+        } else if (D.galleryWrap && D.galleryWrap.offsetHeight > 0) {
+            scrollToElement(D.galleryWrap);
         } else {
-          const mobBtn = $$(".tombol-volume", D.mobVolNav)[vi];
-          if (mobBtn) {
-            $$(".tombol-volume", D.mobVolNav).forEach(b => b.classList.remove("aktif"));
-            mobBtn.classList.add("aktif");
-          }
+            scrollToElement(D.mainContent);
         }
-      }
-      scrollToMain();
-    }
-    // Sembunyikan loading overlay setelah semua selesai dimuat dan ditampilkan
-    D.loadingOverlay.classList.add("hidden");
-  };
+        
+        D.loadingOverlay.classList.add("hidden");
+    };
 
-  const initApp = () => {
-    D.kontenBaca.classList.add("konten-tersembunyi-awal");
-    D.modalChap.classList.add("konten-tersembunyi-awal");
-    D.tombolMulaiBaca.style.display = "block";
-    D.tombolVolumeTerbaru.style.display = "block";
-    initInteractions();
-    // Di sini kita tidak memanggil initContent, jadi loading overlay harus disembunyikan jika tidak ada aktivasi awal.
-    // Jika tombol "Mulai Baca" atau "Volume Terbaru" ditekan, barulah initContent dipanggil dan mengurus loading.
-    // Jadi, secara default, loading overlay harus tersembunyi kecuali saat proses loading aktif.
-    // Pastikan loading overlay tersembunyi saat aplikasi pertama kali dimuat jika tidak langsung memuat konten.
-    D.loadingOverlay.classList.add("hidden");
-  };
+    // Fungsi inisialisasi awal aplikasi saat DOMContentLoaded
+    const initApp = () => {
+        D.kontenBaca.classList.add("konten-tersembunyi-awal");
+        D.modalChap.classList.add("konten-tersembunyi-awal");
+        D.tombolMulaiBaca.style.display = "block";
+        D.tombolVolumeTerbaru.style.display = "block";
+        initInteractions();
+        D.loadingOverlay.classList.add("hidden");
+    };
 
-  // Panggil initApp saat DOM siap
-  initApp();
+    // Jalankan inisialisasi aplikasi
+    initApp();
 });
