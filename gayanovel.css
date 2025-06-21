@@ -1,12 +1,21 @@
 /*============================================
+Tombol Baca
+=============================================*/
+.konten-tersembunyi-awal { display: none; }
+.area-tombol-aksi { position: absolute; bottom: var(--spasi-besar); right: var(--spasi-besar); display: flex; flex-wrap: wrap; gap: var(--spasi-dasar); justify-content: flex-end; }
+.tombol-mulai-baca,
+.tombol-volume-terbaru { padding: var(--spasi-dasar) var(--spasi-besar); font-size: 1.05em; font-weight: 600; border: 1px solid var(--warna-garis-batas); background-color: #fff; color: var(--warna-dasar-teks); border-radius: var(--radius-kecil); cursor: pointer; transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.tombol-mulai-baca:hover,
+.tombol-volume-terbaru:hover { background-color: var(--warna-hover-item); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
+/*============================================
 Post Dalam
 =============================================*/
 .pembungkus-aplikasi { width: 100%; max-width: 1000px; margin: auto; }
 .info-cerita-wrapper { display: flex; flex-wrap: wrap; gap: var(--spasi-besar); padding: var(--spasi-besar); background-color: var(--warna-latar-belakang-putih); border-radius: var(--radius-sedang); box-shadow: 0 1px 5px rgba(0,0,0,0.08); align-items: flex-start; position: relative; }
 .sampul-cerita { flex-shrink: 0; width: 200px; height: 300px; border: 1px solid var(--warna-garis-batas); border-radius: var(--radius-kecil); overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 .sampul-cerita img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.detail-cerita { flex-grow: 1; min-width: 250px; }
-.detail-cerita .judul-cerita { font-size: 2.2em; color: var(--warna-dasar-teks); margin-top: 0; margin-bottom: var(--spasi-dasar); font-weight: 600; }
+.detail-cerita { flex-grow: 1; min-width: 250px; max-width: calc(100% - 220px); }
+.detail-cerita .judul-cerita { font-size: 2.2em; color: var(--warna-dasar-teks); margin-top: 0; margin-bottom: var(--spasi-dasar); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; width: 100%; }
 .detail-cerita .info-tambahan { font-size: 0.9em; color: var(--warna-sekunder-teks); margin-bottom: var(--spasi-besar); line-height: 1.5; }
 .deskripsi-cerita { margin-top: var(--spasi-besar); margin-bottom: var(--spasi-besar); padding: var(--spasi-besar); background-color: var(--warna-latar-belakang-putih); border-radius: var(--radius-sedang); box-shadow: 0 1px 5px rgba(0,0,0,0.08); }
 .deskripsi-cerita h3 { font-size: 1.5em; color: var(--warna-dasar-teks); margin-top: 0; margin-bottom: var(--spasi-sedang); font-weight: 600; }
