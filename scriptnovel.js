@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             // Menggunakan URL proxy Google Apps Script yang kamu berikan
             const response = await fetch("https://script.google.com/macros/s/AKfycbxcZd9hPNfu5wdLKrFM81-Kw4Fp1JSNp4R1fcf-fJako-pBOvXjSKp0hajj0KoAdNTXbA/exec?url=" +
-                encodeURIComponent("https://etdsf.blogspot.com/feeds/posts/default?alt=json"));
+                encodeURIComponent("https://etdsf.blogspot.com/feeds/posts/default?alt=json&max-results=99999"));
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -514,6 +514,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             return labels.includes(D.seriesName) && hasVolumeLabel && hasChapterLabel;
         });
 
+// TAMBAHKAN BARIS INI
+console.log("Filtered Feed for", D.seriesName, ":", filteredFeed);
+// DAN BARIS INI UNTUK MENUNJUKKAN LABEL DARI SEMUA ENTRI SEBELUM FILTER
+console.log("All raw labels from D.feed:", D.feed.map(entry => entry.category?.map(c => c.term) || []));
+
         // Isi volumesData dengan bab yang relevan
         filteredFeed.forEach(entry => {
             const labels = entry.category?.map(c => c.term) || [];
@@ -596,4 +601,49 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Jalankan inisialisasi aplikasi
     initApp();
+});
+//]]></script>
+  
+<!-- Komentar -->
+<script>//<![CDATA[
+// JavaScript
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.querySelector(".comment-form");
+  const commentsSection = document.getElementById("comments");
+  const btn = document.getElementById("addcomment");
+
+  if (form && btn && commentsSection) {
+    form.style.display = "none";
+    commentsSection.style.display = commentsSection.children.length ? "block" : "none";
+
+    btn.onclick = () => {
+      const isHidden = form.style.display === "none";
+      form.style.display = isHidden ? "block" : "none";
+      commentsSection.style.display = "block";
+    };
+  }
+
+  // Ganti label "Anon" & Tambah avatar huruf depan
+  document.querySelectorAll("a[rel='author'] span[itemprop='name']").forEach(t => {
+    if (t.textContent.trim() === "Anon") t.textContent = "Anonim";
+    const p = t.closest(".comment-header")?.parentElement;
+    if (p && !p.querySelector(".avatar-image-container img")) {
+      const a = document.createElement("div");
+      a.className = "anonymous-avatar";
+      a.textContent = t.textContent.charAt(0).toUpperCase();
+      t.closest("a[rel='author']")?.prepend(a);
+    }
+  });
+
+  // Smooth scroll ke komentar saat klik balasan
+  document.addEventListener("click", e => {
+    if (!e.target.matches(".reply-user")) return;
+    e.preventDefault();
+    const target = document.getElementById(e.target.getAttribute("href").slice(1));
+    if (target) {
+      document.querySelector(".highlighted")?.classList.remove("highlighted");
+      target.classList.add("highlighted");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
 });
