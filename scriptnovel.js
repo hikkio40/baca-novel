@@ -41,12 +41,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         tombolVolumeTerbaru: $(".tombol-volume-terbaru"),
         areaTombolAksi: $(".area-tombol-aksi"),
         
-        // --- Bagian baru untuk multiple Apps Script URLs ---
         appsScriptUrls: [
-            "https://script.google.com/macros/s/AKfycbxp1T9oDektHbv9T_jo7OoR7E-8B89hCMNUD_eEy0eQyjekV3ckanhsT4chdqiG5egboA/exec",
+            "https://script.google.com/macros/s/AKfycbyDbSfqpEIRQR-in_xfExEHIgpS5dWMSRtmy7KA4skuo5l1GFD5tKaETQTlvSGnNsVt/exec",
         ],
         currentAppsScriptUrlIndex: 0,
-        // --- Akhir bagian baru ---
     };
 
     const isMob = () => window.matchMedia("(max-width: 768px)").matches;
@@ -56,14 +54,52 @@ document.addEventListener("DOMContentLoaded", async () => {
         return (!isNaN(index) && index >= 0 && index < D.chapters.length) ? index : 0;
     };
 
-    const getChapLabel = (title, labels, chapterCounter) => {
-        const lowerCaseLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
-        if (lowerCaseLabels.includes("chapter")) {
-            return `Bab ${chapterCounter}: ${title || "Tanpa Judul"}`;
-        } else {
-            return title || "Tanpa Judul";
-        }
+    // --- REVISI TERBARU: TITLE_MAPPER dan getChapLabel ---
+    // TITLE_MAPPER sekarang memetakan KEY (label atau judul tunggal) ke VALUE (teks tampilan)
+    const TITLE_MAPPER = {
+        "pembuka": "Pembuka", // Jika labelnya 'pembuka'
+        "selingan": "Selingan",
+        "bonus": "Bonus",
+        "sampingan": "Cerita Sampingan",
+        "penutup": "Penutup",
+        "catatan": "Catatan Penutup",
     };
+
+    // Daftar judul postingan tunggal yang akan diabaikan dan hanya menampilkan labelnya
+    const SINGLE_TITLES = [
+        "prologue",
+        "epilogue",
+        "interlude",
+        "bonus",
+        "side story",
+        "afterward"
+    ];
+
+    const getChapLabel = (title, labels, chapterNumber) => {
+        const lowerCaseLabels = Array.isArray(labels) ? labels.map(l => l.toLowerCase()) : [];
+        const lowerCaseTitle = title ? title.toLowerCase() : '';
+
+        // Prioritas 1: Cek apakah ada label yang cocok dengan TITLE_MAPPER
+        for (const labelKey in TITLE_MAPPER) {
+            if (lowerCaseLabels.includes(labelKey)) {
+                // Jika judul asli adalah salah satu dari SINGLE_TITLES
+                if (SINGLE_TITLES.includes(lowerCaseTitle)) {
+                    return TITLE_MAPPER[labelKey]; // Hanya tampilkan nama label pengganti
+                }
+                // Jika judul asli BUKAN salah satu dari SINGLE_TITLES
+                return `${TITLE_MAPPER[labelKey]}: ${title || "Tanpa Judul"}`;
+            }
+        }
+
+        // Prioritas 2: Jika ada label "bab"
+        if (lowerCaseLabels.includes("bab")) {
+            return `Bab ${chapterNumber}: ${title || "Tanpa Judul"}`;
+        }
+        
+        // Prioritas 3: Default, tampilkan judul asli jika ada
+        return title || "Tanpa Judul";
+    };
+    // --- AKHIR REVISI TERBARU ---
 
     const fetchFeed = async () => {
         D.feed = [];
@@ -91,7 +127,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const data = await response.json();
                     D.feed = data.feed.entry || [];
                     success = true;
-                    break; 
+                    break;
                 } catch (error) {
                     lastError = error;
                     console.error(`Gagal memuat dari Apps Script ${currentUrl}:`, error);
@@ -197,7 +233,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         D.judulGaleri.textContent = `Ilustrasi ${volumeName}`;
 
         const chaptersInVolume = $$("section.konten-bab", volumeElement);
-        let chapterCounter = 1;
 
         for (const chapter of chaptersInVolume) {
             const postId = chapter.dataset.postId;
@@ -205,8 +240,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!entry) continue;
 
             const labels = entry?.category?.map(c => c.term) || [];
-            const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
-            if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
+            const chapterNumber = parseInt(chapter.dataset.chapterNumber); 
+            const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterNumber); 
 
             const parser = new DOMParser();
             const doc = parser.parseFromString(entry.content.$t, "text/html");
@@ -270,16 +305,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         D.modalVolTitle.textContent = volume.dataset.volume || `Volume ${volumeIndex + 1}`;
         D.modalChapList.innerHTML = "";
 
-        let chapterCounter = 1;
         chaptersInVolume.forEach((chapter) => {
             const chapterIndex = D.chapters.indexOf(chapter);
             const postId = chapter.dataset.postId;
             const entry = D.postMap.get(postId);
 
             const labels = entry?.category?.map(c => c.term) || [];
-            const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
-
-            if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
+            const chapterNumber = parseInt(chapter.dataset.chapterNumber); 
+            const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterNumber); 
 
             const button = el("div", D.activeChapterIndex === chapterIndex ? "aktif" : "", chapterLabel);
             button.dataset.indeksKonten = chapterIndex;
@@ -333,16 +366,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                     header.onclick = () => activateChap(+header.dataset.indeksKonten);
                     chapterList.style.display = "none";
                 } else {
-                    let chapterCounter = 1;
                     chaptersInVolume.forEach((chapter) => {
                         const chapterIndex = D.chapters.indexOf(chapter);
                         const postId = chapter.dataset.postId;
                         const entry = D.postMap.get(postId);
 
                         const labels = entry?.category?.map(c => c.term) || [];
-                        const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterCounter);
-
-                        if (labels.map(l => l.toLowerCase()).includes("chapter")) chapterCounter++;
+                        const chapterNumber = parseInt(chapter.dataset.chapterNumber); 
+                        const chapterLabel = getChapLabel(entry?.title.$t || "", labels, chapterNumber); 
 
                         const chapterButton = el("div", "", chapterLabel);
                         chapterButton.dataset.indeksKonten = chapterIndex;
@@ -477,7 +508,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         await fetchFeed();
 
         if (D.feed.length === 0) {
-            const errorMessage = `Tidak ada bab yang ditemukan untuk seri '${D.seriesName}' (pastikan label utama seri, label volume, dan label chapter sudah benar pada postingan).`;
+            const errorMessage = `Tidak ada bab yang ditemukan untuk seri '${D.seriesName}' (pastikan label utama seri dan label volume sudah benar pada postingan).`;
             D.mainContent.innerHTML = `<p style="color:red; text-align:center; padding:50px;">${errorMessage}</p>`;
             console.warn(errorMessage);
             D.loadingOverlay.classList.add("hidden");
@@ -488,23 +519,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         D.volumes = [];
         D.chapters = [];
 
-        const volumesData = {}; 
-        
+        const volumesData = {}; // Objek untuk mengelompokkan chapter berdasarkan volume
+
         D.feed.forEach(entry => {
             const labels = entry.category?.map(c => c.term) || [];
             const volumeLabel = labels.find(l => l.toLowerCase().startsWith("volume "));
-            const chapterLabel = labels.find(l => l.toLowerCase().startsWith("chapter "));
+            const seriesLabel = labels.find(l => l.toLowerCase() === D.seriesName.toLowerCase()); 
 
-            if (volumeLabel && chapterLabel) {
+            if (volumeLabel && seriesLabel) { 
                 const volumeNumberMatch = volumeLabel.match(/\d+/);
                 const volumeNumber = volumeNumberMatch ? parseInt(volumeNumberMatch[0]) : null;
-                const chapterNumberMatch = chapterLabel.match(/\d+/);
-                const chapterNumber = chapterNumberMatch ? parseInt(chapterNumberMatch[0]) : 1; 
 
                 if (volumeNumber !== null) {
                     const volKey = `Volume ${volumeNumber}`;
                     if (!volumesData[volKey]) volumesData[volKey] = [];
-                    volumesData[volKey].push({ entry: entry, order: chapterNumber });
+                    // Tambahkan entri beserta tanggal publikasinya untuk pengurutan
+                    volumesData[volKey].push({ entry: entry, published: new Date(entry.published.$t) });
                 }
             }
         });
@@ -519,19 +549,33 @@ document.addEventListener("DOMContentLoaded", async () => {
             D.mainContent.appendChild(volumeElement);
             D.volumes.push(volumeElement);
 
-            volumesData[volKey].sort((a, b) => a.order - b.order);
+            // Urutkan chapter di dalam volume berdasarkan tanggal publikasi
+            volumesData[volKey].sort((a, b) => a.published.getTime() - b.published.getTime());
 
-            volumesData[volKey].forEach(item => {
+            let chapterCountForVolume = 0; // Inisialisasi penghitung bab untuk volume ini
+
+            volumesData[volKey].forEach((item) => {
                 const chapterElement = el('section', 'konten-bab');
                 chapterElement.dataset.postId = item.entry.id.$t.split('.').pop();
                 chapterElement.dataset.indeks = D.chapters.length;
+                chapterElement.dataset.title = item.entry.title.$t || ""; 
+                
+                const labels = item.entry.category?.map(c => c.term) || [];
+                const lowerCaseLabels = labels.map(l => l.toLowerCase());
+
+                // Hanya tambahkan chapterCountForVolume jika labelnya adalah "bab"
+                if (lowerCaseLabels.includes("bab")) {
+                    chapterCountForVolume++;
+                }
+                chapterElement.dataset.chapterNumber = chapterCountForVolume; 
+
                 volumeElement.appendChild(chapterElement);
                 D.chapters.push(chapterElement);
             });
         });
 
         if (D.chapters.length === 0) {
-            const errorMessage = `Tidak ada bab yang ditemukan dalam seri '${D.seriesName}' setelah diproses (pastikan label volume/chapter sudah benar).`;
+            const errorMessage = `Tidak ada bab yang ditemukan dalam seri '${D.seriesName}' setelah diproses (pastikan label seri dan volume sudah benar).`;
             D.mainContent.innerHTML = `<p style="color:red; text-align:center; padding:50px;">${errorMessage}</p>`;
             console.warn(errorMessage);
             D.loadingOverlay.classList.add("hidden");
