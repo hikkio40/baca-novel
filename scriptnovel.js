@@ -59,10 +59,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const TITLE_MAPPER = {
         "pembuka": "Pembuka", // Jika labelnya 'pembuka'
         "selingan": "Selingan",
-        "bonus": "Bonus",
+        "bonus": "Cerita Tambahan",
         "sampingan": "Cerita Sampingan",
         "penutup": "Penutup",
-        "catatan": "Catatan Penutup",
+        "catatan": "Kata Penutup",
     };
 
     // Daftar judul postingan tunggal yang akan diabaikan dan hanya menampilkan labelnya
